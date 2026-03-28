@@ -1,0 +1,83 @@
+{
+  "schema": "adventure_amanuensis_character",
+  "schemaVersion": "0.1.0",
+  "identity": {
+    "name": "Mae Rourke",
+    "concept": "Dockside mechanic turned desperate spacer",
+    "role": "Mechanic / Engineer",
+    "homeworld": "Persephone"
+  },
+  "attributes": {
+    "Agility": "d6",
+    "Strength": "d6",
+    "Vitality": "d8",
+    "Alertness": "d8",
+    "Intelligence": "d10",
+    "Willpower": "d4"
+  },
+  "traits": {
+    "assets": [
+      {
+        "name": "Talented",
+        "rating": "d2",
+        "notes": "Mechanical Engineering"
+      }
+    ],
+    "complications": [
+      {
+        "name": "Dead Broke",
+        "rating": "d2",
+        "notes": "Always one bill behind."
+      }
+    ]
+  },
+  "skills": {
+    "Mechanical Engineering": {
+      "general": "d6",
+      "specialties": [
+        {
+          "name": "Repair",
+          "rating": "d10"
+        }
+      ]
+    },
+    "Craft": {
+      "general": "d6",
+      "specialties": [
+        {
+          "name": "Cooking",
+          "rating": "d12"
+        }
+      ]
+    }
+  },
+  "derived": {
+    "lifePoints": 12,
+    "initiative": "d6 + d8",
+    "endurance": "d8 + d4"
+  },
+  "finances": {
+    "currentCredits": 623.5,
+    "platinum": 0,
+    "moneyNotes": "Tool debt still hanging over the next port."
+  },
+  "gear": {
+    "purchased": [
+      {
+        "name": "Toolkit",
+        "credits": 40,
+        "availability": "E"
+      }
+    ],
+    "additional": "Patched coat, deck wrench, flashlight"
+  },
+  "trackers": {
+    "stun": 1,
+    "wounds": 0
+  },
+  "notes": {
+    "crewValue": "Keeps the boat running.",
+    "crewConnection": "Owes the captain for a bad dock job.",
+    "crewMotivation": "Trying to stay one jump ahead of creditors."
+  }
+}

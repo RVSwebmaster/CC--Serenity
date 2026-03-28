@@ -1,0 +1,25 @@
+
+export const SKILLS = [
+  { name: 'Animal Handling', specialties: ['Horses', 'Livestock', 'Training'] },
+  { name: 'Artistry', specialties: ['Drawing', 'Painting', 'Sculpture'] },
+  { name: 'Athletics', specialties: ['Climbing', 'Dodge', 'Lifting', 'Running', 'Swimming'] },
+  { name: 'Covert', specialties: ['Disguise', 'Forgery', 'Pickpocket', 'Sabotage', 'Stealth', 'Streetwise', 'Surveillance'] },
+  { name: 'Craft', specialties: ['Cooking', 'Sewing', 'Woodworking'] },
+  { name: 'Discipline', specialties: ['Concentration', 'Interrogation', 'Intimidation', 'Leadership', 'Mental Resistance'] },
+  { name: 'Guns', specialties: ['Pistols', 'Rifles', 'Shotguns', 'SMGs', 'Gunsmithing'] },
+  { name: 'Heavy Weapons', specialties: ['Grenade Launchers', 'Rocket Launchers', 'Vehicle Guns'] },
+  { name: 'Influence', specialties: ['Administration', 'Bureaucracy', 'Fast Talk', 'Leadership', 'Negotiation', 'Persuasion', 'Politics', 'Seduction'] },
+  { name: 'Knowledge', specialties: ['Appraisal', 'Business', 'Culture', 'History', 'Law', 'Medicine', 'Military Regulations', 'Philosophy', 'Religion', 'Tactics'] },
+  { name: 'Linguistics', specialties: ['Chinese', 'Border Slang', 'Trade Patois'] },
+  { name: 'Mechanical Engineering', specialties: ['Machinery Maintenance', 'Repair', 'Powerplants', 'Vehicle Repair'] },
+  { name: 'Medical Expertise', specialties: ['First Aid', 'Internal Medicine', 'Neurology', 'Pharmaceuticals', 'Physiology', 'Surgery', 'Toxicology'] },
+  { name: 'Melee Weapon Combat', specialties: ['Clubs', 'Knives', 'Sword', 'Axes'] },
+  { name: 'Performance', specialties: ['Dance', 'Oratory', 'Piano', 'Singing'] },
+  { name: 'Perception', specialties: ['Deduction', 'Empathy', 'Hearing', 'Intuition', 'Investigation', 'Search', 'Sight', 'Taste', 'Tracking'] },
+  { name: 'Pilot', specialties: ['Astrogation', 'Aerial Navigation', 'Mid-Bulk Transports', 'Short-Range Shuttles', 'Spacecraft Gunnery'] },
+  { name: 'Planetary Vehicles', specialties: ['Bikes', 'Cars', 'Ground Vehicle Repair', 'Hovermules'] },
+  { name: 'Scientific Expertise', specialties: ['Chemistry', 'Electronics', 'Forensics', 'Life Sciences'] },
+  { name: 'Survival', specialties: ['Aquatic Survival', 'Mining', 'Space Survival', 'Tracking', 'Trapping'] },
+  { name: 'Technical Engineering', specialties: ['Communications', 'Electronics', 'Hacking', 'Security Systems', 'Technical Repair'] },
+  { name: 'Unarmed Combat', specialties: ['Aikido', 'Brawling', 'Karate', 'Wrestling'] }
+];

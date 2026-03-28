@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "adventure_amanuensis_character.schema.json",
+  "title": "Adventure Amanuensis Character Dossier",
+  "type": "object",
+  "description": "Placeholder shared schema for Character Crucible to Amanuensis handoff.",
+  "properties": {
+    "meta": {
+      "type": "object"
+    },
+    "character": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}
