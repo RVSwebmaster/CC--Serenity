@@ -480,6 +480,16 @@ small.help { color: var(--muted); display: block; margin-top: 0.25rem; }
 .trait-info-copy {
   margin-bottom: 0.2rem;
 }
+.trait-info-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+.trait-info-list li {
+  margin-bottom: 0.2rem;
+}
+.trait-nested-list {
+  margin-top: 0.35rem;
+}
 
 @media (max-width: 1100px) {
   .main-layout { grid-template-columns: 1fr; }

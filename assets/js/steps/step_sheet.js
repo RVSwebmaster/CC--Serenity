@@ -3,6 +3,7 @@ import { getPurchasedGearTotal } from '../data/equipment.js';
 import { calculateCurrentCredits, formatMoney } from '../data/gear_packages.js';
 import { resolveRoleLabel } from '../data/roles.js';
 import { getSpecialtyDisplayName } from '../data/specialties.js';
+import { findCuratedTrait } from '../data/traits.js';
 import { effectiveGeneralRating, isAssignedAttributeDie } from '../rules.js';
 import { el } from '../ui.js';
 
@@ -55,12 +56,37 @@ function renderPurchasedGear(details) {
   ));
 }
 
-function renderTraits(list) {
+function resolveTraitRank(meta, rating = 'none') {
+  if (!meta) return '';
+  if (meta.rankByRating?.[rating]) return meta.rankByRating[rating];
+  return meta.rank || '';
+}
+
+function renderTraits(list, category) {
   const filtered = list.filter((item) => item.name && item.rating !== 'none');
   if (!filtered.length) return el('p', { cls: 'muted', text: 'None selected.' });
-  return el('ul', { cls: 'summary-list' }, filtered.map((trait) =>
-    el('li', { text: `${trait.name} ${trait.rating}${trait.notes ? ` - ${trait.notes}` : ''}` })
-  ));
+  return el('ul', { cls: 'summary-list' }, filtered.map((trait) => {
+    const meta = findCuratedTrait(category, trait.name);
+    const displayName = meta?.name || trait.name;
+    const resolvedRank = resolveTraitRank(meta, trait.rating);
+    const heading = resolvedRank ? `${displayName} (${resolvedRank})` : `${displayName} ${trait.rating}`;
+    const benefit = meta?.benefits?.[trait.rating] || '';
+    const detail = [meta?.summary, meta?.description, benefit, meta?.gmApproval ? 'GM approval required.' : '', meta?.note, trait.notes].filter(Boolean);
+
+    if (meta?.plotPointTable?.length || detail.length > 1) {
+      return el('li', {}, [
+        el('strong', { text: heading }),
+        ...detail.map((line) => el('p', { cls: 'sheet-copy', text: line })),
+        meta?.plotPointTable?.length
+          ? el('ul', { cls: 'summary-list trait-nested-list' }, meta.plotPointTable.map((row) =>
+            el('li', { text: `${row.cost}: ${row.result}` })
+          ))
+          : null
+      ]);
+    }
+
+    return el('li', { text: detail.length ? `${heading} - ${detail.join(' ')}` : heading });
+  }));
 }
 
 function renderSkills(character) {
@@ -425,8 +451,8 @@ export function renderSheetStep(state, mutateCharacter) {
   ]));
 
   sheet.append(el('div', { cls: 'grid-2 sheet-section-grid' }, [
-    el('section', { cls: 'sheet-block' }, [el('h3', { text: 'Assets' }), renderTraits(state.character.traits.assets)]),
-    el('section', { cls: 'sheet-block' }, [el('h3', { text: 'Complications' }), renderTraits(state.character.traits.complications)])
+    el('section', { cls: 'sheet-block' }, [el('h3', { text: 'Assets' }), renderTraits(state.character.traits.assets, 'asset')]),
+    el('section', { cls: 'sheet-block' }, [el('h3', { text: 'Complications' }), renderTraits(state.character.traits.complications, 'complication')])
   ]));
 
   sheet.append(el('section', { cls: 'sheet-block' }, [

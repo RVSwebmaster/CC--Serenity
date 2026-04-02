@@ -1,11 +1,21 @@
 import { createEmptyTrait, TRAIT_OPTIONS } from '../data/defaults.js';
-import { CURATED_ASSETS, CURATED_COMPLICATIONS, getMutuallyExclusiveTraits, isRepeatableTrait } from '../data/traits.js';
+import { CURATED_ASSETS, CURATED_COMPLICATIONS, findCuratedTrait, getMutuallyExclusiveTraits, isRepeatableTrait } from '../data/traits.js';
 import { el, sectionHeader } from '../ui.js';
 
 const activeTraitSelection = {
   asset: null,
   complication: null
 };
+
+function resolveTraitRank(traitMeta, rating = 'none') {
+  if (!traitMeta) return '';
+  if (traitMeta.rankByRating?.[rating]) return traitMeta.rankByRating[rating];
+  return traitMeta.rank || '';
+}
+
+function resolveCanonicalTraitName(category, name = '') {
+  return findCuratedTrait(category, name)?.name || name;
+}
 
 function getTraitInfo(category, trait, curated) {
   const label = category === 'asset' ? 'Asset' : 'Complication';
@@ -17,7 +27,12 @@ function getTraitInfo(category, trait, curated) {
     return {
       title: `No ${label} selected`,
       summary: defaultSummary,
-      ratings: 'd2 or d4 depending on the trait.'
+      description: '',
+      details: [`Type: ${label}`, 'Rank varies by trait.', 'Allowed ratings: d2 or d4 depending on the trait.'],
+      benefit: '',
+      benefitLabel: '',
+      note: '',
+      table: []
     };
   }
 
@@ -25,23 +40,47 @@ function getTraitInfo(category, trait, curated) {
     return {
       title: trait.name || `Custom ${label}`,
       summary: 'Manual entry. Use Notes to record the exact effect, limit, or story hook you want the GM to remember.',
-      ratings: trait.rating === 'none' ? 'Pick a die rating to price this custom trait.' : `Current rating: ${trait.rating}.`
+      description: '',
+      details: [
+        `Type: ${label}`,
+        trait.rating === 'none' ? 'Pick a die rating to price this custom trait.' : `Current rating: ${trait.rating}.`
+      ],
+      benefit: '',
+      benefitLabel: '',
+      note: '',
+      table: []
     };
   }
 
-  const traitMeta = curated.find((item) => item.name === trait.name);
+  const traitMeta = findCuratedTrait(category, trait.name);
   if (!traitMeta) {
     return {
       title: trait.name || `Choose an ${label}`,
       summary: defaultSummary,
-      ratings: 'Allowed ratings appear once a curated trait is chosen.'
+      description: '',
+      details: [`Type: ${label}`, 'Allowed ratings appear once a curated trait is chosen.'],
+      benefit: '',
+      benefitLabel: '',
+      note: '',
+      table: []
     };
   }
+
+  const details = [`Type: ${traitMeta.type || label}`];
+  const resolvedRank = resolveTraitRank(traitMeta, trait.rating);
+  if (resolvedRank || traitMeta.rank) details.push(`Rank: ${resolvedRank || traitMeta.rank}`);
+  details.push(`Allowed ratings: ${traitMeta.allowedRatings.join(', ')}`);
+  if (traitMeta.gmApproval) details.push('GM approval required');
 
   return {
     title: traitMeta.name,
     summary: traitMeta.summary,
-    ratings: `Allowed ratings: ${traitMeta.allowedRatings.join(', ')}`
+    description: traitMeta.description || '',
+    details,
+    benefit: traitMeta.benefits?.[trait.rating] || '',
+    benefitLabel: traitMeta.benefits?.[trait.rating] ? `Benefit (${resolveTraitRank(traitMeta, trait.rating) || trait.rating})` : '',
+    note: traitMeta.note || '',
+    table: traitMeta.plotPointTable || []
   };
 }
 
@@ -55,18 +94,18 @@ function chooseActiveTrait(list, category) {
   return active;
 }
 
-function getUnavailableTraitNames(stateList, currentTrait) {
+function getUnavailableTraitNames(stateList, currentTrait, category) {
   return stateList
     .filter((item) => item.id !== currentTrait.id && item.name && !isRepeatableTrait(item.name))
-    .map((item) => item.name);
+    .map((item) => resolveCanonicalTraitName(category, item.name));
 }
 
-function getBlockedTraitNames(list, oppositeList, currentTrait) {
+function getBlockedTraitNames(list, oppositeList, currentTrait, category) {
   const blocked = new Set();
   [...list, ...oppositeList]
     .filter((item) => item.id !== currentTrait.id && item.name)
     .forEach((item) => {
-      getMutuallyExclusiveTraits(item.name).forEach((name) => blocked.add(name));
+      getMutuallyExclusiveTraits(resolveCanonicalTraitName(category, item.name)).forEach((name) => blocked.add(name));
     });
   return blocked;
 }
@@ -83,12 +122,20 @@ function buildTraitSection(title, list, oppositeList, curated, onChange, categor
 
   const infoTitle = el('strong', { cls: 'trait-info-title' });
   const infoSummary = el('p', { cls: 'trait-info-copy' });
-  const infoRatings = el('p', { cls: 'trait-info-line muted' });
+  const infoDescription = el('p', { cls: 'trait-info-line' });
+  const infoDetails = el('p', { cls: 'trait-info-line muted' });
+  const infoBenefit = el('p', { cls: 'trait-info-line' });
+  const infoNote = el('p', { cls: 'trait-info-line muted' });
+  const infoTable = el('ul', { cls: 'trait-info-list muted' });
   const infoBox = el('div', { cls: 'trait-info-box' }, [
     el('div', { cls: 'trait-info-label', text: category === 'asset' ? 'Asset explainer' : 'Complication explainer' }),
     infoTitle,
     infoSummary,
-    infoRatings
+    infoDescription,
+    infoDetails,
+    infoBenefit,
+    infoNote,
+    infoTable
   ]);
   wrap.append(infoBox);
 
@@ -97,14 +144,26 @@ function buildTraitSection(title, list, oppositeList, curated, onChange, categor
     const info = getTraitInfo(category, trait, curated);
     infoTitle.textContent = info.title;
     infoSummary.textContent = info.summary;
-    infoRatings.textContent = info.ratings;
+    infoDescription.textContent = info.description || '';
+    infoDescription.hidden = !info.description;
+    infoDetails.textContent = info.details.join(' | ');
+    infoBenefit.textContent = info.benefit ? `${info.benefitLabel}: ${info.benefit}` : '';
+    infoBenefit.hidden = !info.benefit;
+    infoNote.textContent = info.note ? `Note: ${info.note}` : '';
+    infoNote.hidden = !info.note;
+    infoTable.innerHTML = '';
+    infoTable.hidden = !info.table.length;
+    info.table.forEach((row) => {
+      infoTable.append(el('li', { text: `${row.cost}: ${row.result}` }));
+    });
   };
 
   list.forEach((trait) => {
     const isLegacyManual = (trait.source || 'curated') === 'manual';
-    const traitMeta = curated.find((item) => item.name === trait.name);
-    const ownSelections = getUnavailableTraitNames(list, trait);
-    const blockedSelections = getBlockedTraitNames(list, oppositeList, trait);
+    const traitMeta = findCuratedTrait(category, trait.name);
+    const canonicalTraitName = resolveCanonicalTraitName(category, trait.name);
+    const ownSelections = getUnavailableTraitNames(list, trait, category);
+    const blockedSelections = getBlockedTraitNames(list, oppositeList, trait, category);
     const nameWrap = el('div', { cls: 'trait-name-wrap' });
 
     let nameInput;
@@ -119,11 +178,13 @@ function buildTraitSection(title, list, oppositeList, curated, onChange, categor
       blank.textContent = 'Choose a trait';
       nameInput.append(blank);
       curated.forEach((item) => {
-        if ((ownSelections.includes(item.name) || blockedSelections.has(item.name)) && item.name !== trait.name) return;
+        if ((ownSelections.includes(item.name) || blockedSelections.has(item.name)) && item.name !== canonicalTraitName) return;
         const opt = document.createElement('option');
         opt.value = item.name;
-        opt.textContent = item.name;
-        if (trait.name === item.name) opt.selected = true;
+        const optionRank = item.rankByRating ? 'Minor/Major' : item.rank;
+        opt.textContent = optionRank ? `${item.name} (${optionRank})` : item.name;
+        opt.title = [item.summary, item.description, item.note].filter(Boolean).join(' ');
+        if (canonicalTraitName === item.name || (item.aliases || []).includes(trait.name)) opt.selected = true;
         nameInput.append(opt);
       });
     }
@@ -132,7 +193,7 @@ function buildTraitSection(title, list, oppositeList, curated, onChange, categor
       onChange((draft) => {
         const target = draft.traits[category === 'asset' ? 'assets' : 'complications'].find((item) => item.id === trait.id);
         target.name = event.target.value;
-        const match = curated.find((item) => item.name === target.name);
+        const match = findCuratedTrait(category, target.name);
         if (match && !match.allowedRatings.includes(target.rating)) {
           target.rating = match.allowedRatings[0];
         }
@@ -142,10 +203,16 @@ function buildTraitSection(title, list, oppositeList, curated, onChange, categor
 
     const ratingSelect = document.createElement('select');
     const allowedRatings = traitMeta?.allowedRatings || TRAIT_OPTIONS.filter((item) => item !== 'none');
-    ['none', ...allowedRatings].forEach((rating) => {
+    const ratingChoices = ['none', ...allowedRatings];
+    if (trait.rating !== 'none' && !ratingChoices.includes(trait.rating)) {
+      ratingChoices.push(trait.rating);
+    }
+    ratingChoices.forEach((rating) => {
       const opt = document.createElement('option');
       opt.value = rating;
-      opt.textContent = rating === 'none' ? '—' : rating;
+      opt.textContent = rating === 'none'
+        ? '-'
+        : (!allowedRatings.includes(rating) && rating === trait.rating ? `${rating} (legacy)` : rating);
       if (trait.rating === rating) opt.selected = true;
       ratingSelect.append(opt);
     });
