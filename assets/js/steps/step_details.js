@@ -1,4 +1,4 @@
-import { createPurchasedGearEntry, EQUIPMENT_GROUPS, getEquipmentItemById, getPurchasedGearTotal } from '../data/equipment.js';
+import { createPurchasedGearEntry, EQUIPMENT_GROUPS, formatEquipmentPrice, getEquipmentItemById, getPurchasedGearTotal } from '../data/equipment.js';
 import { calculateCurrentCredits, formatMoney, resolveStartingCredits } from '../data/gear_packages.js';
 import { el, field, sectionHeader } from '../ui.js';
 
@@ -19,9 +19,9 @@ function buildPurchasedGearList(state, onChange) {
     const row = el('div', { cls: 'purchased-gear-item' }, [
       el('div', { cls: 'purchased-gear-main' }, [
         el('strong', { text: entry.name }),
-        el('small', { cls: 'muted', text: `${entry.category} • ${entry.availability}${entry.note ? ` • ${entry.note}` : ''}` })
+        el('small', { cls: 'muted', text: `${entry.category} • ${entry.availability}${entry.source ? ` • ${entry.source}` : ''}${entry.note ? ` • ${entry.note}` : ''}` })
       ]),
-      el('span', { cls: 'points-badge', text: formatMoney(entry.credits, '₡', '0 ₡') })
+      el('span', { cls: 'points-badge', text: entry.price || formatEquipmentPrice(entry) })
     ]);
 
     const removeButton = document.createElement('button');
@@ -64,7 +64,7 @@ function createSelectionInfoPanel() {
     }
 
     title.textContent = item.name;
-    meta.textContent = `${item.category} • ${formatMoney(item.credits, '₡')} • ${item.availability}`;
+    meta.textContent = `${item.category} • ${formatEquipmentPrice(item)} • ${item.availability}${item.source ? ` • ${item.source}` : ''}`;
     summary.textContent = item.summary || 'No catalog summary yet.';
     summary.className = 'equipment-info-copy';
     stats.textContent = item.stats ? `Stats: ${item.stats}` : '';
@@ -141,7 +141,7 @@ export function renderDetailsStep(state, onChange) {
     group.items.forEach((item) => {
       const option = document.createElement('option');
       option.value = item.id;
-      option.textContent = item.name;
+      option.textContent = `${item.name} (${formatEquipmentPrice(item)})`;
       option.title = item.stats ? `${item.summary} ${item.stats}` : item.summary;
       optgroup.append(option);
     });

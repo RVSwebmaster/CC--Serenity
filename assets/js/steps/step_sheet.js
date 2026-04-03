@@ -1,5 +1,5 @@
 import { ATTRIBUTE_LIST, PLOT_POINT_MAX } from '../data/defaults.js';
-import { getPurchasedGearTotal } from '../data/equipment.js';
+import { formatEquipmentPrice, getPurchasedGearTotal } from '../data/equipment.js';
 import { calculateCurrentCredits, formatMoney } from '../data/gear_packages.js';
 import { resolveRoleLabel } from '../data/roles.js';
 import { getSpecialtyDisplayName } from '../data/specialties.js';
@@ -52,7 +52,7 @@ function renderPurchasedGear(details) {
   const entries = details.purchasedGear || [];
   if (!entries.length) return el('p', { cls: 'muted', text: 'No catalog gear purchased.' });
   return el('ul', { cls: 'summary-list' }, entries.map((entry) =>
-    el('li', { text: `${entry.name} (${formatMoney(entry.credits, '\u20a1')}, ${entry.availability})` })
+    el('li', { text: `${entry.name} (${entry.price || formatEquipmentPrice(entry)}, ${entry.availability}${entry.source ? `, ${entry.source}` : ''})` })
   ));
 }
 
