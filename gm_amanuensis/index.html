@@ -7,8 +7,21 @@
   <link rel="stylesheet" href="assets/css/app.css" />
 </head>
 <body>
+  <div id="splashScreen" class="gm-splash-screen" aria-hidden="true">
+    <div class="gm-splash-frame">
+      <img src="assets/images/gm_splash.png" alt="Adventurer's Amanuensis splash art" class="gm-splash-image" />
+    </div>
+  </div>
   <div id="app"></div>
 
+  <script>
+    window.setTimeout(() => {
+      const splash = document.getElementById('splashScreen');
+      if (!splash) return;
+      splash.classList.add('is-hidden');
+      window.setTimeout(() => splash.remove(), 650);
+    }, 5000);
+  </script>
   <script src="assets/js/app.bundle.js"></script>
 </body>
 </html>
