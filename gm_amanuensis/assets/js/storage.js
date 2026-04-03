@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'gm_amanuensis_serenity_session';
-const STORAGE_VERSION = 3;
+const STORAGE_VERSION = 4;
 
 export function saveSession(session) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -8,6 +8,7 @@ export function saveSession(session) {
     activeTab: session.activeTab,
     currentTurnMemberId: session.currentTurnMemberId,
     ship: session.ship,
+    enemyTrackers: session.enemyTrackers,
     crew: session.crew
   }));
 }

@@ -377,7 +377,7 @@ function createPlotPointBubble(value, current, mutateCharacter) {
 }
 
 function renderPlotPointTracker(character, mutateCharacter) {
-  const current = clampTrackerValue(character.trackers?.plotPoints ?? 1, PLOT_POINT_MAX);
+  const current = clampTrackerValue(character.trackers?.plotPoints ?? 6, PLOT_POINT_MAX);
   const clear = el('button', {
     cls: 'damage-clear-button',
     text: 'Clear',

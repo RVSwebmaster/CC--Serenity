@@ -8,7 +8,7 @@
     maxAttribute: "d12",
     maxSkill: "d12"
   };
-  var PLOT_POINT_MAX = 6;
+  var PLOT_POINT_MAX = 12;
   var ATTRIBUTE_LIST = [
     "Agility",
     "Strength",
@@ -85,7 +85,7 @@
         notes: ""
       },
       trackers: {
-        plotPoints: 1,
+        plotPoints: 6,
         stun: 0,
         wounds: 0
       },
@@ -3493,7 +3493,7 @@
     return button;
   }
   function renderPlotPointTracker(character, mutateCharacter2) {
-    const current = clampTrackerValue(character.trackers?.plotPoints ?? 1, PLOT_POINT_MAX);
+    const current = clampTrackerValue(character.trackers?.plotPoints ?? 6, PLOT_POINT_MAX);
     const clear = el("button", {
       cls: "damage-clear-button",
       text: "Clear",

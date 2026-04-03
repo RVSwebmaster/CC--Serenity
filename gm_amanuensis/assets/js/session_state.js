@@ -10,6 +10,7 @@ const DEFAULT_SHIP = Object.freeze({
   name: 'Serenity',
   className: 'Firefly-class transport',
   concept: 'Battered free-trader, reluctant sanctuary, and getaway crate with opinions.',
+  editLocked: true,
   specifications: {
     dimensions: '191 x 128 x 53 ft',
     tonnage: 'Mid-bulk transport frame',
@@ -74,6 +75,9 @@ const DEFAULT_SHIP = Object.freeze({
   }
 });
 
+const ENEMY_TRACKER_COUNT = 8;
+const ENEMY_LIFE_MAX = 20;
+
 function makeId() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -83,6 +87,34 @@ function makeId() {
 
 function sanitizeText(value, fallback = '') {
   return typeof value === 'string' ? value : fallback;
+}
+
+function clampEnemyLife(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return 0;
+  return Math.max(0, Math.min(ENEMY_LIFE_MAX, parsed));
+}
+
+function createDefaultEnemyTrackers() {
+  return Array.from({ length: ENEMY_TRACKER_COUNT }, (_, index) => ({
+    id: `enemy_${index + 1}`,
+    label: `Enemy ${index + 1}`,
+    life: 0
+  }));
+}
+
+function sanitizeEnemyTrackers(input) {
+  const fallback = createDefaultEnemyTrackers();
+  const source = Array.isArray(input) ? input : [];
+
+  return fallback.map((entry, index) => {
+    const incoming = source[index] && typeof source[index] === 'object' && !Array.isArray(source[index]) ? source[index] : {};
+    return {
+      id: entry.id,
+      label: sanitizeText(incoming.label, entry.label),
+      life: clampEnemyLife(incoming.life)
+    };
+  });
 }
 
 function createDefaultShipState() {
@@ -112,6 +144,7 @@ function sanitizeShipState(input) {
     name: sanitizeText(source.name, fallback.name),
     className: sanitizeText(source.className, fallback.className),
     concept: sanitizeText(source.concept, fallback.concept),
+    editLocked: typeof source.editLocked === 'boolean' ? source.editLocked : fallback.editLocked,
     specifications: {
       dimensions: sanitizeText(sourceSpecifications.dimensions, fallback.specifications.dimensions),
       tonnage: sanitizeText(sourceSpecifications.tonnage, fallback.specifications.tonnage),
@@ -148,7 +181,7 @@ function sanitizeShipState(input) {
     },
     notes: sanitizeText(source.notes, fallback.notes),
     jack: {
-      name: 'Jack',
+      name: sanitizeText(sourceJack.name, fallback.jack.name),
       role: sanitizeText(sourceJack.role, fallback.jack.role),
       attitude: sanitizeText(sourceJack.attitude, fallback.jack.attitude),
       attributes: {
@@ -266,7 +299,7 @@ function ensureTieBreakers(crew) {
 function normalizeSession(session) {
   const crew = ensureTieBreakers(Array.isArray(session?.crew) ? session.crew : []);
   const crewIds = new Set(crew.map((member) => member.id));
-  const validTabs = new Set(['gm', 'ship', ...crewIds]);
+  const validTabs = new Set(['gm', 'transit', 'ship', ...crewIds]);
   const activeTab = validTabs.has(session?.activeTab) ? session.activeTab : 'gm';
   const currentTurnMemberId = crewIds.has(session?.currentTurnMemberId)
     ? session.currentTurnMemberId
@@ -275,6 +308,7 @@ function normalizeSession(session) {
   return {
     crew,
     ship: sanitizeShipState(session?.ship),
+    enemyTrackers: sanitizeEnemyTrackers(session?.enemyTrackers),
     activeTab,
     currentTurnMemberId
   };
@@ -360,9 +394,19 @@ export function clearCrew() {
   return {
     crew: [],
     ship: createDefaultShipState(),
+    enemyTrackers: createDefaultEnemyTrackers(),
     activeTab: 'gm',
     currentTurnMemberId: null
   };
+}
+
+export function updateEnemyTracker(session, trackerId, mutator) {
+  return normalizeSession({
+    ...session,
+    enemyTrackers: (session.enemyTrackers || []).map((tracker) => (
+      tracker.id === trackerId ? mutator(structuredClone(tracker)) : tracker
+    ))
+  });
 }
 
 export function setActiveTab(session, tabId) {

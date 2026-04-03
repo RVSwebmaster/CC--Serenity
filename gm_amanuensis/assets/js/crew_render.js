@@ -2,6 +2,7 @@ import { ATTRIBUTE_LIST } from '../../../assets/js/data/defaults.js';
 import { effectiveGeneralRating, lifePoints } from '../../../assets/js/rules.js';
 import { el } from '../../../assets/js/ui.js';
 import { getCrewCharacter } from './session_state.js';
+import { renderTransitPanel } from './transit_panel.js';
 
 const DIFFICULTY_LADDER = [
   ['Trivial', '3'],
@@ -58,6 +59,8 @@ const SHIP_ATTRIBUTE_FIELDS = [
   ['Initiative', 'attributes.initiative'],
   ['Life', 'attributes.life']
 ];
+
+const ENEMY_LIFE_MAX = 20;
 
 function displayRole(character) {
   return character.basics.role || character.basics.customRole || 'Unassigned';
@@ -139,6 +142,54 @@ function renderJackStat(label, value) {
   ]);
 }
 
+function shipFieldAttrs(ship, extra = {}) {
+  return ship.editLocked !== false ? { ...extra, disabled: 'disabled' } : extra;
+}
+
+function renderEnemyLifeBubble(trackerId, value, current) {
+  return el('button', {
+    cls: `gm-enemy-life-bubble${value <= current ? ' filled' : ''}`,
+    attrs: {
+      type: 'button',
+      title: `Set life to ${value}`,
+      'aria-label': `Set enemy life to ${value}`
+    },
+    dataset: { action: 'set-enemy-life', memberId: trackerId, value: String(value) }
+  });
+}
+
+function renderEnemyTrackerRow(tracker) {
+  return el('div', { cls: 'gm-enemy-tracker-row' }, [
+    el('div', { cls: 'gm-enemy-tracker-head' }, [
+      el('strong', { text: tracker.label }),
+      el('div', { cls: 'gm-enemy-tracker-meta' }, [
+        el('span', { cls: 'gm-badge gm-badge-soft', text: `${tracker.life} / ${ENEMY_LIFE_MAX}` }),
+        el('button', {
+          cls: 'gm-button gm-button-compact',
+          text: 'Clear',
+          attrs: { type: 'button' },
+          dataset: { action: 'clear-enemy-life', memberId: tracker.id }
+        })
+      ])
+    ]),
+    el('div', { cls: 'gm-enemy-life-track' }, Array.from({ length: ENEMY_LIFE_MAX }, (_, index) => {
+      const value = index + 1;
+      return renderEnemyLifeBubble(tracker.id, value, tracker.life);
+    }))
+  ]);
+}
+
+function renderEnemyTrackerPanel(session) {
+  return el('section', { cls: 'gm-utility-card gm-enemy-tracker-panel' }, [
+    el('h3', { cls: 'gm-utility-title', text: 'Enemy Life Trackers' }),
+    el('p', {
+      cls: 'gm-panel-copy gm-enemy-tracker-copy',
+      text: 'Eight quick enemy rows, twenty life points each. Click across the row to match current damage.'
+    }),
+    el('div', { cls: 'gm-enemy-tracker-list' }, (session.enemyTrackers || []).map((tracker) => renderEnemyTrackerRow(tracker)))
+  ]);
+}
+
 function renderGMUtilityPanel(session) {
   return el('section', { cls: 'gm-main-panel gm-bridge-panel' }, [
     el('div', { cls: 'gm-panel-header' }, [
@@ -177,6 +228,12 @@ function renderGMUtilityPanel(session) {
             ...(session.crew.length === 0 ? { disabled: 'disabled' } : {})
           },
           dataset: { action: 'clear-initiative' }
+        }),
+        el('button', {
+          cls: 'gm-button',
+          text: 'Open Transit Calculator',
+          attrs: { type: 'button' },
+          dataset: { action: 'select-tab', tabId: 'transit' }
         })
       ])
     ]),
@@ -194,7 +251,8 @@ function renderGMUtilityPanel(session) {
         'Step down for wounds, panic, poor footing, visibility, or rushed actions.',
         'If both apply, cancel what clearly cancels and keep the rest moving.'
       ])
-    ])
+    ]),
+    renderEnemyTrackerPanel(session)
   ]);
 }
 
@@ -387,58 +445,65 @@ function renderCharacterPanel(member, session) {
 }
 
 function renderShipPanel(ship) {
+  const isLocked = ship.editLocked !== false;
   const shipTraitItems = parseShipList(ship.traits);
   const shipSkillItems = parseShipList(ship.skills);
 
   const shipGearField = el('textarea', {
     cls: 'gm-ship-field-textarea',
-    attrs: { rows: '2', placeholder: 'Gear' },
+    attrs: shipFieldAttrs(ship, { rows: '2', placeholder: 'Gear' }),
     dataset: { action: 'ship-field', shipField: 'specifications.gear' }
   });
   shipGearField.value = ship.specifications.gear || '';
 
   const shipDamageField = el('textarea', {
     cls: 'gm-ship-field-textarea',
-    attrs: { rows: '3', placeholder: 'Stress, hull damage, broken systems, jury-rigged fixes.' },
+    attrs: shipFieldAttrs(ship, { rows: '3', placeholder: 'Stress, hull damage, broken systems, jury-rigged fixes.' }),
     dataset: { action: 'ship-field', shipField: 'condition.currentDamage' }
   });
   shipDamageField.value = ship.condition.currentDamage || '';
 
   const shipTraitsField = el('textarea', {
-    attrs: { rows: '4', placeholder: 'Ship traits, quirks, complications, or edges.' },
+    attrs: shipFieldAttrs(ship, { rows: '4', placeholder: 'Ship traits, quirks, complications, or edges.' }),
     dataset: { action: 'ship-field', shipField: 'traits' }
   });
   shipTraitsField.value = ship.traits || '';
 
   const shipSkillsField = el('textarea', {
-    attrs: { rows: '4', placeholder: 'Ship skills, specialties, or operational strengths.' },
+    attrs: shipFieldAttrs(ship, { rows: '4', placeholder: 'Ship skills, specialties, or operational strengths.' }),
     dataset: { action: 'ship-field', shipField: 'skills' }
   });
   shipSkillsField.value = ship.skills || '';
 
   const shipNotesField = el('textarea', {
-    attrs: { rows: '5', placeholder: 'Ship notes, cargo trouble, fuel worries, docking headaches, or scene hooks.' },
+    attrs: shipFieldAttrs(ship, { rows: '5', placeholder: 'Ship notes, cargo trouble, fuel worries, docking headaches, or scene hooks.' }),
     dataset: { action: 'ship-field', shipField: 'notes' }
   });
   shipNotesField.value = ship.notes || '';
 
   const shipPerformanceNotesField = el('textarea', {
-    attrs: { rows: '4', placeholder: 'GM notes tied to thrust, handling, heat, subsystem strain, or scene performance.' },
+    attrs: shipFieldAttrs(ship, { rows: '4', placeholder: 'GM notes tied to thrust, handling, heat, subsystem strain, or scene performance.' }),
     dataset: { action: 'ship-field', shipField: 'condition.performanceNotes' }
   });
   shipPerformanceNotesField.value = ship.condition.performanceNotes || '';
 
   const jackTraitsField = el('textarea', {
-    attrs: { rows: '3', placeholder: 'Behavior notes, favorite ducts, habits, grudges, or tricks.' },
+    attrs: shipFieldAttrs(ship, { rows: '3', placeholder: 'Behavior notes, favorite ducts, habits, grudges, or tricks.' }),
     dataset: { action: 'jack-field', shipField: 'jack.traits' }
   });
   jackTraitsField.value = ship.jack.traits || '';
 
   const jackNotesField = el('textarea', {
-    attrs: { rows: '3', placeholder: 'Short GM note for Jack.' },
+    attrs: shipFieldAttrs(ship, { rows: '3', placeholder: 'Short GM note for Jack.' }),
     dataset: { action: 'jack-field', shipField: 'jack.notes' }
   });
   jackNotesField.value = ship.jack.notes || '';
+
+  const jackSkillsField = el('textarea', {
+    attrs: shipFieldAttrs(ship, { rows: '6', placeholder: 'One skill per line for Jack.' }),
+    dataset: { action: 'jack-skills-field', shipField: 'jack.skills' }
+  });
+  jackSkillsField.value = (ship.jack.skills || []).join('\n');
 
   return el('section', {
     cls: 'gm-main-panel gm-ship-panel',
@@ -452,8 +517,23 @@ function renderShipPanel(ship) {
         el('div', { cls: 'gm-panel-badges' }, [
           renderBadge(ship.condition.hull, 'gm-badge-soft'),
           renderBadge(ship.condition.drive, 'gm-badge-soft'),
-          renderBadge(ship.condition.posture, 'gm-badge-soft')
+          renderBadge(ship.condition.posture, 'gm-badge-soft'),
+          renderBadge(isLocked ? 'Locked' : 'Editing', isLocked ? 'gm-badge-soft' : 'gm-badge-current')
         ])
+      ]),
+      el('div', { cls: 'gm-ship-panel-tools' }, [
+        el('p', {
+          cls: 'gm-ship-lock-copy',
+          text: isLocked
+            ? 'Ship data is locked to prevent accidental edits.'
+            : 'Ship data is unlocked. Changes save immediately.'
+        }),
+        el('button', {
+          cls: `gm-button ${isLocked ? 'gm-button-primary' : ''}`.trim(),
+          text: isLocked ? 'Unlock Ship Data' : 'Lock Ship Data',
+          attrs: { type: 'button' },
+          dataset: { action: 'toggle-ship-edit-lock' }
+        })
       ])
     ]),
     el('div', { cls: 'gm-ship-layout' }, [
@@ -464,21 +544,21 @@ function renderShipPanel(ship) {
             el('label', { cls: 'gm-form-field' }, [
               el('span', { text: 'Ship Name' }),
               el('input', {
-                attrs: { type: 'text', value: ship.name },
+                attrs: shipFieldAttrs(ship, { type: 'text', value: ship.name }),
                 dataset: { action: 'ship-field', shipField: 'name' }
               })
             ]),
             el('label', { cls: 'gm-form-field' }, [
               el('span', { text: 'Class / Type' }),
               el('input', {
-                attrs: { type: 'text', value: ship.className },
+                attrs: shipFieldAttrs(ship, { type: 'text', value: ship.className }),
                 dataset: { action: 'ship-field', shipField: 'className' }
               })
             ]),
             el('label', { cls: 'gm-form-field gm-form-field-wide' }, [
               el('span', { text: 'Concept / Role Line' }),
               el('input', {
-                attrs: { type: 'text', value: ship.concept },
+                attrs: shipFieldAttrs(ship, { type: 'text', value: ship.concept }),
                 dataset: { action: 'ship-field', shipField: 'concept' }
               })
             ])
@@ -494,7 +574,7 @@ function renderShipPanel(ship) {
               label === 'Gear'
                 ? shipGearField
                 : el('input', {
-                  attrs: { type: 'text', value: valueAtPath(ship, path) },
+                  attrs: shipFieldAttrs(ship, { type: 'text', value: valueAtPath(ship, path) }),
                   dataset: { action: 'ship-field', shipField: path }
                 })
             ])
@@ -506,7 +586,7 @@ function renderShipPanel(ship) {
             el('label', { cls: 'gm-form-field' }, [
               el('span', { text: label }),
               el('input', {
-                attrs: { type: 'text', value: valueAtPath(ship, path) },
+                attrs: shipFieldAttrs(ship, { type: 'text', value: valueAtPath(ship, path) }),
                 dataset: { action: 'ship-field', shipField: path }
               })
             ])
@@ -541,6 +621,7 @@ function renderShipPanel(ship) {
               el('label', { cls: 'gm-form-field' }, [
                 el('span', { text: label }),
                 el('select', {
+                  attrs: shipFieldAttrs(ship),
                   dataset: { action: 'ship-field', shipField: path }
                 }, values.map((value) => {
                   const option = el('option', {
@@ -561,14 +642,14 @@ function renderShipPanel(ship) {
             el('label', { cls: 'gm-form-field' }, [
               el('span', { text: 'Current Life' }),
               el('input', {
-                attrs: { type: 'text', value: ship.condition.currentLife },
+                attrs: shipFieldAttrs(ship, { type: 'text', value: ship.condition.currentLife }),
                 dataset: { action: 'ship-field', shipField: 'condition.currentLife' }
               })
             ]),
             el('label', { cls: 'gm-form-field' }, [
               el('span', { text: 'System State' }),
               el('input', {
-                attrs: { type: 'text', value: ship.condition.systemState },
+                attrs: shipFieldAttrs(ship, { type: 'text', value: ship.condition.systemState }),
                 dataset: { action: 'ship-field', shipField: 'condition.systemState' }
               })
             ]),
@@ -600,32 +681,66 @@ function renderShipPanel(ship) {
       el('aside', { cls: 'gm-character-column gm-character-side' }, [
         el('section', { cls: 'gm-utility-card gm-jack-card' }, [
           el('h3', { cls: 'gm-utility-title', text: 'Jack' }),
-          el('p', { cls: 'gm-jack-role', text: ship.jack.role }),
-          el('p', { cls: 'gm-jack-attitude', text: ship.jack.attitude }),
+          el('div', { cls: 'gm-form-grid' }, [
+            el('label', { cls: 'gm-form-field' }, [
+              el('span', { text: 'Jack Name' }),
+              el('input', {
+                attrs: shipFieldAttrs(ship, { type: 'text', value: ship.jack.name || '' }),
+                dataset: { action: 'jack-field', shipField: 'jack.name' }
+              })
+            ]),
+            el('label', { cls: 'gm-form-field' }, [
+              el('span', { text: 'Role' }),
+              el('input', {
+                attrs: shipFieldAttrs(ship, { type: 'text', value: ship.jack.role || '' }),
+                dataset: { action: 'jack-field', shipField: 'jack.role' }
+              })
+            ]),
+            el('label', { cls: 'gm-form-field gm-form-field-wide' }, [
+              el('span', { text: 'Attitude' }),
+              el('input', {
+                attrs: shipFieldAttrs(ship, { type: 'text', value: ship.jack.attitude || '' }),
+                dataset: { action: 'jack-field', shipField: 'jack.attitude' }
+              })
+            ])
+          ]),
           el('div', { cls: 'gm-jack-stat-block' }, [
             el('p', { cls: 'gm-jack-block-title', text: 'Attributes' }),
-            el('div', { cls: 'gm-jack-attribute-line', text: [
-              `Agl ${ship.jack.attributes.agility}`,
-              `Str ${ship.jack.attributes.strength}`,
-              `Vit ${ship.jack.attributes.vitality}`,
-              `Ale ${ship.jack.attributes.alertness}`,
-              `Int ${ship.jack.attributes.intelligence}`,
-              `Wil ${ship.jack.attributes.willpower}`
-            ].join(' | ') }),
-            el('div', { cls: 'gm-jack-stat-row' }, [
-              renderJackStat('Life', ship.jack.lifePoints),
-              renderJackStat('Initiative', ship.jack.initiative)
+            el('div', { cls: 'gm-form-grid gm-form-grid-jack-attributes' }, [
+              ...Object.entries({
+                Agility: 'jack.attributes.agility',
+                Strength: 'jack.attributes.strength',
+                Vitality: 'jack.attributes.vitality',
+                Alertness: 'jack.attributes.alertness',
+                Intelligence: 'jack.attributes.intelligence',
+                Willpower: 'jack.attributes.willpower',
+                Life: 'jack.lifePoints',
+                Initiative: 'jack.initiative'
+              }).map(([label, path]) => (
+                el('label', { cls: 'gm-form-field' }, [
+                  el('span', { text: label }),
+                  el('input', {
+                    attrs: shipFieldAttrs(ship, { type: 'text', value: valueAtPath(ship, path) }),
+                    dataset: { action: 'jack-field', shipField: path }
+                  })
+                ])
+              ))
             ])
           ]),
           el('div', { cls: 'gm-jack-stat-block' }, [
             el('p', { cls: 'gm-jack-block-title', text: 'Key Skills' }),
             el('ul', { cls: 'gm-jack-skill-list' }, ship.jack.skills.map((skill) => (
               el('li', { cls: 'gm-jack-skill-item', text: skill })
-            )))
+            ))),
+            el('div', { cls: 'gm-note-field' }, [
+              el('label', { text: 'Jack skills' }),
+              jackSkillsField
+            ])
           ]),
           el('label', { cls: 'gm-form-field' }, [
             el('span', { text: 'Jack Condition' }),
             el('select', {
+              attrs: shipFieldAttrs(ship),
               dataset: { action: 'jack-field', shipField: 'jack.condition' }
             }, SHIP_SELECTS.jackCondition.map((value) => {
               const option = el('option', {
@@ -661,7 +776,7 @@ function renderTabRail(session) {
   return el('section', { cls: 'gm-tab-shell' }, [
     el('div', { cls: 'gm-tab-rail', attrs: { role: 'tablist', 'aria-label': 'GM console tabs' } }, [
       el('article', {
-        cls: `gm-tab-card gm-tab-gm ${session.activeTab === 'gm' ? 'is-active' : ''}`.trim(),
+        cls: `gm-tab-card gm-tab-gm ${session.activeTab === 'gm' || session.activeTab === 'transit' ? 'is-active' : ''}`.trim(),
         attrs: { style: '--tab-accent: #78d0be;' },
         dataset: { action: 'select-tab', tabId: 'gm' }
       }, [
@@ -730,6 +845,8 @@ export function renderDashboard(root, session, flash) {
     renderTabRail(session),
     session.activeTab === 'gm'
       ? renderGMUtilityPanel(session)
+      : session.activeTab === 'transit'
+        ? renderTransitPanel()
       : session.activeTab === 'ship'
         ? renderShipPanel(session.ship)
         : activeMember

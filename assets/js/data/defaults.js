@@ -7,7 +7,7 @@ export const HEROIC_LEVEL = {
   maxSkill: 'd12'
 };
 
-export const PLOT_POINT_MAX = 6;
+export const PLOT_POINT_MAX = 12;
 
 export const ATTRIBUTE_LIST = [
   'Agility',
@@ -90,7 +90,7 @@ export function createDefaultCharacter() {
       notes: ''
     },
     trackers: {
-      plotPoints: 1,
+      plotPoints: 6,
       stun: 0,
       wounds: 0
     },

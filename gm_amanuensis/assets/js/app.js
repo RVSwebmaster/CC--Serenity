@@ -11,6 +11,7 @@ import {
   resetRound,
   setActiveTab,
   updateCrewMember,
+  updateEnemyTracker,
   updateShipState
 } from './session_state.js';
 
@@ -99,6 +100,13 @@ function updateNestedValue(target, path, value) {
   }
   updateNestedValue(target[head], rest, value);
   return target;
+}
+
+function parseLineList(value) {
+  return String(value || '')
+    .split('\n')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 export function bootGMAmanuensis(root = document.getElementById('app')) {
@@ -225,11 +233,45 @@ export function bootGMAmanuensis(root = document.getElementById('app')) {
       return;
     }
 
+    if (action === 'toggle-ship-edit-lock') {
+      const nextLocked = !(session.ship?.editLocked === false);
+      commit(updateShipState(session, (ship) => ({
+        ...ship,
+        editLocked: !nextLocked
+      })), {
+        text: nextLocked ? 'Ship data unlocked for editing.' : 'Ship data locked against accidental edits.',
+        kind: 'ok'
+      });
+      return;
+    }
+
     if (action === 'remove-member' && memberId) {
       commit(removeCrewMember(session, memberId), {
         text: 'Crew member removed from the active GM session.',
         kind: 'ok'
       });
+      return;
+    }
+
+    if (action === 'set-enemy-life' && memberId) {
+      const bubbleValue = Number.parseInt(trigger.dataset.value || '0', 10) || 0;
+      const tracker = (session.enemyTrackers || []).find((entry) => entry.id === memberId);
+      if (!tracker) return;
+      const nextValue = tracker.life === bubbleValue ? bubbleValue - 1 : bubbleValue;
+      commit(updateEnemyTracker(session, memberId, (entry) => ({
+        ...entry,
+        life: Math.max(0, nextValue)
+      })), null, { render: false });
+      render();
+      return;
+    }
+
+    if (action === 'clear-enemy-life' && memberId) {
+      commit(updateEnemyTracker(session, memberId, (entry) => ({
+        ...entry,
+        life: 0
+      })), null, { render: false });
+      render();
       return;
     }
 
@@ -253,6 +295,11 @@ export function bootGMAmanuensis(root = document.getElementById('app')) {
     const shipField = target.dataset.shipField;
 
     if (shipField) {
+      if (session.ship?.editLocked !== false) return;
+      if (action === 'jack-skills-field') {
+        patchShip(shipField, parseLineList(target.value), { render: false });
+        return;
+      }
       patchShip(shipField, target.value, { render: false });
       return;
     }
@@ -303,6 +350,11 @@ export function bootGMAmanuensis(root = document.getElementById('app')) {
     const shipField = target.dataset.shipField;
 
     if (shipField) {
+      if (session.ship?.editLocked !== false) return;
+      if (action === 'jack-skills-field') {
+        patchShip(shipField, parseLineList(target.value), { render: false });
+        return;
+      }
       patchShip(shipField, target.value, { render: false });
       return;
     }
