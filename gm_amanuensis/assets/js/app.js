@@ -225,9 +225,9 @@ export function bootGMAmanuensis(root = document.getElementById('app')) {
     }
 
     if (action === 'clear-crew') {
-      if (!window.confirm('Clear the entire GM session roster and reset the ship board?')) return;
-      commit(clearCrew(), {
-        text: 'Crew, ship, and Jack state reset cleanly.',
+      if (!window.confirm('Clear the imported crew roster and reset turn tracking? Ship data will stay as-is.')) return;
+      commit(clearCrew(session), {
+        text: 'Crew roster cleared. Ship data and enemy trackers were left in place.',
         kind: 'ok'
       });
       return;

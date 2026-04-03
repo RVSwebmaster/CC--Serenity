@@ -390,14 +390,13 @@ export function removeCrewMember(session, memberId) {
   });
 }
 
-export function clearCrew() {
-  return {
+export function clearCrew(session = {}) {
+  return normalizeSession({
+    ...session,
     crew: [],
-    ship: createDefaultShipState(),
-    enemyTrackers: createDefaultEnemyTrackers(),
     activeTab: 'gm',
     currentTurnMemberId: null
-  };
+  });
 }
 
 export function updateEnemyTracker(session, trackerId, mutator) {

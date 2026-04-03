@@ -1594,14 +1594,13 @@
       crew: session.crew.filter((member) => member.id !== memberId)
     });
   }
-  function clearCrew() {
-    return {
+  function clearCrew(session = {}) {
+    return normalizeSession({
+      ...session,
       crew: [],
-      ship: createDefaultShipState(),
-      enemyTrackers: createDefaultEnemyTrackers(),
       activeTab: "gm",
       currentTurnMemberId: null
-    };
+    });
   }
   function updateEnemyTracker(session, trackerId, mutator) {
     return normalizeSession({
@@ -3031,9 +3030,31 @@
 
   // gm_amanuensis/assets/js/storage.js
   var STORAGE_KEY = "gm_amanuensis_serenity_session";
-  var STORAGE_VERSION = 4;
+  var SHIP_STORAGE_KEY = "gm_amanuensis_serenity_ship";
+  var ENEMY_TRACKER_STORAGE_KEY = "gm_amanuensis_serenity_enemy_trackers";
+  var STORAGE_VERSION = 5;
+  function safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (error) {
+      console.warn(`GM Amanuensis could not persist ${key}.`, error);
+      return false;
+    }
+  }
+  function safeParseItem(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (error) {
+      localStorage.removeItem(key);
+      return null;
+    }
+  }
   function saveSession(session) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    const payload = {
       version: STORAGE_VERSION,
       savedAt: (/* @__PURE__ */ new Date()).toISOString(),
       activeTab: session.activeTab,
@@ -3041,18 +3062,31 @@
       ship: session.ship,
       enemyTrackers: session.enemyTrackers,
       crew: session.crew
+    };
+    safeSetItem(STORAGE_KEY, JSON.stringify(payload));
+    safeSetItem(SHIP_STORAGE_KEY, JSON.stringify({
+      version: STORAGE_VERSION,
+      savedAt: payload.savedAt,
+      ship: session.ship
+    }));
+    safeSetItem(ENEMY_TRACKER_STORAGE_KEY, JSON.stringify({
+      version: STORAGE_VERSION,
+      savedAt: payload.savedAt,
+      enemyTrackers: session.enemyTrackers
     }));
   }
   function loadSession() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch (error) {
-      localStorage.removeItem(STORAGE_KEY);
+    const session = safeParseItem(STORAGE_KEY);
+    const shipSnapshot = safeParseItem(SHIP_STORAGE_KEY);
+    const enemyTrackerSnapshot = safeParseItem(ENEMY_TRACKER_STORAGE_KEY);
+    if (!session && !shipSnapshot && !enemyTrackerSnapshot) {
       return null;
     }
+    return {
+      ...session || {},
+      ...shipSnapshot?.ship ? { ship: shipSnapshot.ship } : {},
+      ...enemyTrackerSnapshot?.enemyTrackers ? { enemyTrackers: enemyTrackerSnapshot.enemyTrackers } : {}
+    };
   }
 
   // gm_amanuensis/assets/js/app.js
@@ -3223,9 +3257,9 @@
         return;
       }
       if (action === "clear-crew") {
-        if (!window.confirm("Clear the entire GM session roster and reset the ship board?")) return;
-        commit(clearCrew(), {
-          text: "Crew, ship, and Jack state reset cleanly.",
+        if (!window.confirm("Clear the imported crew roster and reset turn tracking? Ship data will stay as-is.")) return;
+        commit(clearCrew(session), {
+          text: "Crew roster cleared. Ship data and enemy trackers were left in place.",
           kind: "ok"
         });
         return;
