@@ -35,9 +35,6 @@ export function hydrateCharacter(input) {
   delete character.details.portraitUrl;
   Object.assign(character.trackers, input.trackers || {});
   Object.assign(character.meta, input.meta || {});
-  if (typeof character.meta.characterId !== 'string' || !character.meta.characterId.trim()) {
-    character.meta.characterId = base.meta.characterId;
-  }
   character.details.purchasedGear = (input.details?.purchasedGear || []).map((item) => normalizePurchasedGearEntry(item));
 
   character.traits.assets = (input.traits?.assets || character.traits.assets).map((trait) => ({
@@ -74,4 +71,3 @@ export function hydrateCharacter(input) {
 
   return character;
 }
-

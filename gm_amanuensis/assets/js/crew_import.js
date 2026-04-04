@@ -11,7 +11,7 @@ function createStageError(stage, message, cause = null) {
   return error;
 }
 
-export function validateImportedPayload(payload) {
+function validateImportedPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw createStageError('validation', 'root JSON must be an object');
   }
@@ -90,4 +90,3 @@ export async function importCrewFiles(fileList) {
 
   return { imported, rejected };
 }
-

@@ -1,45 +1,4 @@
 (() => {
-  // assets/js/handoff.js
-  var GM_HANDOFF_QUEUE_KEY = "serenity_suite_gm_handoff_queue";
-  var GM_HANDOFF_PREFIX = "SERENITY-HANDOFF:";
-  function safeParseQueue() {
-    try {
-      const raw = localStorage.getItem(GM_HANDOFF_QUEUE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-      localStorage.removeItem(GM_HANDOFF_QUEUE_KEY);
-      return [];
-    }
-  }
-  function decodeBase64(value) {
-    const binary = atob(value);
-    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  }
-  function consumeQueuedGMHandshakes() {
-    const queue = safeParseQueue();
-    localStorage.removeItem(GM_HANDOFF_QUEUE_KEY);
-    return queue.filter((entry) => entry && typeof entry === "object" && entry.payload);
-  }
-  function decodeCharacterHandoffCode(rawValue) {
-    const value = String(rawValue || "").trim();
-    if (!value.startsWith(GM_HANDOFF_PREFIX)) {
-      throw new Error("That handoff code is not a Serenity GM handoff.");
-    }
-    const encoded = value.slice(GM_HANDOFF_PREFIX.length);
-    const decoded = decodeBase64(encoded);
-    const parsed = JSON.parse(decoded);
-    if (!parsed || typeof parsed !== "object" || !parsed.payload) {
-      throw new Error("The handoff code did not contain a valid character payload.");
-    }
-    return parsed;
-  }
-  function getGMHandoffQueueKey() {
-    return GM_HANDOFF_QUEUE_KEY;
-  }
-
   // assets/js/data/defaults.js
   var HEROIC_LEVEL = {
     name: "Greenhorn",
@@ -120,7 +79,6 @@
         wounds: 0
       },
       meta: {
-        characterId: makeId(),
         heroicLevel: HEROIC_LEVEL.name,
         lastUpdated: null
       }
@@ -327,9 +285,6 @@
     delete character.details.portraitUrl;
     Object.assign(character.trackers, input.trackers || {});
     Object.assign(character.meta, input.meta || {});
-    if (typeof character.meta.characterId !== "string" || !character.meta.characterId.trim()) {
-      character.meta.characterId = base.meta.characterId;
-    }
     character.details.purchasedGear = (input.details?.purchasedGear || []).map((item) => normalizePurchasedGearEntry(item));
     character.traits.assets = (input.traits?.assets || character.traits.assets).map((trait) => ({
       id: trait.id || (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function" ? globalThis.crypto.randomUUID() : createEmptySpecialty().id),
@@ -1511,10 +1466,6 @@
     if (!Number.isFinite(sides) || sides <= 0) return 0;
     return Math.floor(Math.random() * sides) + 1;
   }
-  function getCharacterId(payload) {
-    const character = hydrateCharacter(payload);
-    return typeof character.meta?.characterId === "string" && character.meta.characterId.trim() ? character.meta.characterId : null;
-  }
   function normalizeCrewMember(record, fallbackColor = "") {
     if (!record || typeof record !== "object" || Array.isArray(record)) return null;
     if (!record.payload || typeof record.payload !== "object" || Array.isArray(record.payload)) return null;
@@ -1592,6 +1543,20 @@
       currentTurnMemberId
     };
   }
+  function makeImportedMembers(session, importedCrew) {
+    const usedColors = session.crew.map((member) => member.gm.tabColor).filter(Boolean);
+    return importedCrew.map((record) => {
+      const tabColor = pickNextTabColor(usedColors);
+      usedColors.push(tabColor);
+      return normalizeCrewMember({
+        id: makeId3(),
+        sourceName: record.sourceName,
+        importedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        payload: record.payload,
+        gm: { tabColor }
+      }, tabColor);
+    }).filter(Boolean);
+  }
   function createSessionState(seed) {
     const baseCrew = Array.isArray(seed?.crew) ? seed.crew.map((member) => normalizeCrewMember(member)).filter(Boolean) : [];
     return normalizeSession({
@@ -1602,55 +1567,14 @@
     });
   }
   function mergeImportedCrew(session, importedCrew) {
-    const usedColors = session.crew.map((member) => member.gm.tabColor).filter(Boolean);
-    const existingByCharacterId = new Map(
-      session.crew.map((member) => [getCharacterId(member.payload), member]).filter(([characterId]) => typeof characterId === "string" && characterId)
-    );
-    let crew = [...session.crew];
-    let firstNewMemberId = null;
-    let addedCount = 0;
-    let replacedCount = 0;
-    importedCrew.forEach((record) => {
-      const characterId = getCharacterId(record.payload);
-      const existing = characterId ? existingByCharacterId.get(characterId) : null;
-      if (existing) {
-        const replacement = normalizeCrewMember({
-          ...existing,
-          sourceName: record.sourceName,
-          importedAt: (/* @__PURE__ */ new Date()).toISOString(),
-          payload: record.payload,
-          gm: existing.gm
-        }, existing.gm.tabColor);
-        crew = crew.map((member2) => member2.id === existing.id ? replacement : member2);
-        replacedCount += 1;
-        return;
-      }
-      const tabColor = pickNextTabColor(usedColors);
-      usedColors.push(tabColor);
-      const member = normalizeCrewMember({
-        id: makeId3(),
-        sourceName: record.sourceName,
-        importedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        payload: record.payload,
-        gm: { tabColor }
-      }, tabColor);
-      if (!member) return;
-      if (!firstNewMemberId) firstNewMemberId = member.id;
-      crew.push(member);
-      if (characterId) existingByCharacterId.set(characterId, member);
-      addedCount += 1;
+    const newMembers = makeImportedMembers(session, importedCrew);
+    const nextActiveTab = session.crew.length === 0 && newMembers.length > 0 ? newMembers[0].id : session.activeTab;
+    return normalizeSession({
+      ...session,
+      crew: [...session.crew, ...newMembers],
+      activeTab: nextActiveTab,
+      currentTurnMemberId: session.currentTurnMemberId || newMembers[0]?.id || null
     });
-    const nextActiveTab = session.crew.length === 0 && firstNewMemberId ? firstNewMemberId : session.activeTab;
-    return {
-      session: normalizeSession({
-        ...session,
-        crew,
-        activeTab: nextActiveTab,
-        currentTurnMemberId: session.currentTurnMemberId || firstNewMemberId || null
-      }),
-      addedCount,
-      replacedCount
-    };
   }
   function updateCrewMember(session, memberId, mutator) {
     return normalizeSession({
@@ -3090,12 +3014,6 @@
           el("label", { cls: "gm-file-button", text: "Import Character JSON" }, [importInput]),
           el("button", {
             cls: "gm-button",
-            text: "Paste Handoff Code",
-            attrs: { type: "button" },
-            dataset: { action: "paste-handoff-code" }
-          }),
-          el("button", {
-            cls: "gm-button",
             text: "Clear Crew",
             attrs: {
               type: "button"
@@ -3176,13 +3094,10 @@
     if (error instanceof Error && error.message) return error.message;
     return fallback;
   }
-  function buildImportMessage(addedCount, replacedCount, rejected) {
+  function buildImportMessage(importedCount, rejected) {
     const parts = [];
-    if (addedCount > 0) {
-      parts.push(`Imported ${addedCount} crew member${addedCount === 1 ? "" : "s"} into the GM console.`);
-    }
-    if (replacedCount > 0) {
-      parts.push(`Updated ${replacedCount} existing crew tab${replacedCount === 1 ? "" : "s"} with fresher Character Crucible data.`);
+    if (importedCount > 0) {
+      parts.push(`Imported ${importedCount} crew file${importedCount === 1 ? "" : "s"} into the GM console.`);
     }
     if (rejected.length > 0) {
       parts.push(`Skipped ${rejected.length}: ${rejected.map((entry) => `${entry.sourceName}: ${entry.message}`).join(" | ")}`);
@@ -3203,8 +3118,7 @@
       import: "Import failed",
       merge: "Imported crew could not be added to the session",
       persist: "Imported crew loaded, but session persistence failed",
-      render: "Imported crew loaded, but the dashboard could not rerender",
-      handoff: "Character handoff failed"
+      render: "Imported crew loaded, but the dashboard could not rerender"
     }[stage] || "Import failed";
     return {
       text: `${label}: ${describeError(error)}`,
@@ -3249,12 +3163,6 @@
   function parseLineList(value) {
     return String(value || "").split("\n").map((entry) => entry.trim()).filter(Boolean);
   }
-  function convertHandoffsToImportedRecords(entries) {
-    return entries.map((entry) => ({
-      payload: entry.payload,
-      sourceName: `${entry.summary?.name || entry.payload?.basics?.name || "Crew Member"} handoff`
-    }));
-  }
   function bootGMAmanuensis(root = document.getElementById("app")) {
     if (!root) return null;
     let session = createSessionState(loadSession());
@@ -3273,49 +3181,33 @@
         renderFatalError(root, buildPipelineErrorMessage("render", error), error);
       }
     }
-    function applyImportedRecords(imported, rejected = [], options = {}) {
-      let addedCount = 0;
-      let replacedCount = 0;
-      let persistError = null;
-      if (imported.length > 0) {
-        try {
-          const mergeOutcome = mergeImportedCrew(session, imported);
-          session = mergeOutcome.session;
-          addedCount = mergeOutcome.addedCount;
-          replacedCount = mergeOutcome.replacedCount;
-        } catch (error) {
-          flash = buildPipelineErrorMessage("merge", error);
-          if (options.render !== false) render();
-          return { addedCount: 0, replacedCount: 0 };
-        }
-        try {
-          persist();
-        } catch (error) {
-          persistError = error;
-        }
-      }
-      flash = persistError ? buildPipelineErrorMessage("persist", persistError) : buildImportMessage(addedCount, replacedCount, rejected);
-      if (options.render !== false) {
-        render();
-      }
-      return { addedCount, replacedCount };
-    }
-    function importQueuedHandoffs(options = {}) {
-      const queued = consumeQueuedGMHandshakes();
-      if (queued.length === 0) return { addedCount: 0, replacedCount: 0 };
-      return applyImportedRecords(convertHandoffsToImportedRecords(queued), [], options);
-    }
     async function handleImport(event) {
       const files = event.target.files;
       if (!files || files.length === 0) return;
       try {
         const results = await importCrewFiles(files);
-        applyImportedRecords(results.imported, results.rejected);
+        let persistError = null;
+        if (results.imported.length > 0) {
+          try {
+            session = mergeImportedCrew(session, results.imported);
+          } catch (error) {
+            flash = buildPipelineErrorMessage("merge", error);
+            event.target.value = "";
+            render();
+            return;
+          }
+          try {
+            persist();
+          } catch (error) {
+            persistError = error;
+          }
+        }
+        flash = persistError ? buildPipelineErrorMessage("persist", persistError) : buildImportMessage(results.imported.length, results.rejected);
       } catch (error) {
         flash = buildPipelineErrorMessage("import", error);
-        render();
       }
       event.target.value = "";
+      render();
     }
     function commit(nextSession, nextFlash = null, options = {}) {
       session = nextSession;
@@ -3335,39 +3227,10 @@
         render: options.render
       });
     }
-    window.addEventListener("storage", (event) => {
-      if (event.key !== getGMHandoffQueueKey()) return;
-      importQueuedHandoffs();
-    });
-    root.addEventListener("click", async (event) => {
+    root.addEventListener("click", (event) => {
       const trigger = event.target.closest("[data-action]");
       if (!trigger) return;
       const { action, memberId, field, delta, tabId } = trigger.dataset;
-      if (action === "paste-handoff-code") {
-        let raw = "";
-        if (navigator.clipboard && typeof navigator.clipboard.readText === "function") {
-          try {
-            raw = await navigator.clipboard.readText();
-          } catch (error) {
-          }
-        }
-        if (!String(raw || "").trim()) {
-          raw = window.prompt("Paste the Serenity GM handoff code from Character Crucible.");
-        }
-        if (!raw) return;
-        try {
-          const handoff = decodeCharacterHandoffCode(raw);
-          validateImportedPayload(handoff.payload);
-          applyImportedRecords([{
-            payload: handoff.payload,
-            sourceName: `${handoff.summary?.name || handoff.payload?.basics?.name || "Crew Member"} handoff code`
-          }], []);
-        } catch (error) {
-          flash = buildPipelineErrorMessage("handoff", error);
-          render();
-        }
-        return;
-      }
       if (action === "select-tab") {
         commit(setActiveTab(session, tabId || "gm"), null);
         return;
@@ -3533,7 +3396,6 @@
         }
       })), null, { render: false });
     });
-    importQueuedHandoffs({ render: false });
     render();
     return {
       getSession: () => structuredClone(session)

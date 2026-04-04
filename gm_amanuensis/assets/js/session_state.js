@@ -216,13 +216,6 @@ function rollAgilityTieBreaker(payload) {
   return Math.floor(Math.random() * sides) + 1;
 }
 
-function getCharacterId(payload) {
-  const character = hydrateCharacter(payload);
-  return typeof character.meta?.characterId === 'string' && character.meta.characterId.trim()
-    ? character.meta.characterId
-    : null;
-}
-
 function normalizeCrewMember(record, fallbackColor = '') {
   if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
   if (!record.payload || typeof record.payload !== 'object' || Array.isArray(record.payload)) return null;
@@ -361,66 +354,17 @@ export function createSessionState(seed) {
 }
 
 export function mergeImportedCrew(session, importedCrew) {
-  const usedColors = session.crew.map((member) => member.gm.tabColor).filter(Boolean);
-  const existingByCharacterId = new Map(
-    session.crew
-      .map((member) => [getCharacterId(member.payload), member])
-      .filter(([characterId]) => typeof characterId === 'string' && characterId)
-  );
-
-  let crew = [...session.crew];
-  let firstNewMemberId = null;
-  let addedCount = 0;
-  let replacedCount = 0;
-
-  importedCrew.forEach((record) => {
-    const characterId = getCharacterId(record.payload);
-    const existing = characterId ? existingByCharacterId.get(characterId) : null;
-
-    if (existing) {
-      const replacement = normalizeCrewMember({
-        ...existing,
-        sourceName: record.sourceName,
-        importedAt: new Date().toISOString(),
-        payload: record.payload,
-        gm: existing.gm
-      }, existing.gm.tabColor);
-      crew = crew.map((member) => (member.id === existing.id ? replacement : member));
-      replacedCount += 1;
-      return;
-    }
-
-    const tabColor = pickNextTabColor(usedColors);
-    usedColors.push(tabColor);
-    const member = normalizeCrewMember({
-      id: makeId(),
-      sourceName: record.sourceName,
-      importedAt: new Date().toISOString(),
-      payload: record.payload,
-      gm: { tabColor }
-    }, tabColor);
-
-    if (!member) return;
-    if (!firstNewMemberId) firstNewMemberId = member.id;
-    crew.push(member);
-    if (characterId) existingByCharacterId.set(characterId, member);
-    addedCount += 1;
-  });
-
-  const nextActiveTab = session.crew.length === 0 && firstNewMemberId
-    ? firstNewMemberId
+  const newMembers = makeImportedMembers(session, importedCrew);
+  const nextActiveTab = session.crew.length === 0 && newMembers.length > 0
+    ? newMembers[0].id
     : session.activeTab;
 
-  return {
-    session: normalizeSession({
-      ...session,
-      crew,
-      activeTab: nextActiveTab,
-      currentTurnMemberId: session.currentTurnMemberId || firstNewMemberId || null
-    }),
-    addedCount,
-    replacedCount
-  };
+  return normalizeSession({
+    ...session,
+    crew: [...session.crew, ...newMembers],
+    activeTab: nextActiveTab,
+    currentTurnMemberId: session.currentTurnMemberId || newMembers[0]?.id || null
+  });
 }
 
 export function updateCrewMember(session, memberId, mutator) {
@@ -522,5 +466,3 @@ export function clearInitiative(session) {
 export function getCrewCharacter(member) {
   return hydrateCharacter(member?.payload);
 }
-
-

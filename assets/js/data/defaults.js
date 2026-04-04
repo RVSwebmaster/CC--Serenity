@@ -95,7 +95,6 @@ export function createDefaultCharacter() {
       wounds: 0
     },
     meta: {
-      characterId: makeId(),
       heroicLevel: HEROIC_LEVEL.name,
       lastUpdated: null
     }
@@ -120,4 +119,3 @@ export function createEmptySpecialty() {
     rating: 'none'
   };
 }
-

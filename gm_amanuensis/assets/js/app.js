@@ -1,9 +1,4 @@
-import {
-  consumeQueuedGMHandshakes,
-  decodeCharacterHandoffCode,
-  getGMHandoffQueueKey
-} from '../../../assets/js/handoff.js';
-import { importCrewFiles, validateImportedPayload } from './crew_import.js';
+import { importCrewFiles } from './crew_import.js';
 import { renderDashboard } from './crew_render.js';
 import { loadSession, saveSession } from './storage.js';
 import {
@@ -25,15 +20,11 @@ function describeError(error, fallback = 'Unexpected error.') {
   return fallback;
 }
 
-function buildImportMessage(addedCount, replacedCount, rejected) {
+function buildImportMessage(importedCount, rejected) {
   const parts = [];
 
-  if (addedCount > 0) {
-    parts.push(`Imported ${addedCount} crew member${addedCount === 1 ? '' : 's'} into the GM console.`);
-  }
-
-  if (replacedCount > 0) {
-    parts.push(`Updated ${replacedCount} existing crew tab${replacedCount === 1 ? '' : 's'} with fresher Character Crucible data.`);
+  if (importedCount > 0) {
+    parts.push(`Imported ${importedCount} crew file${importedCount === 1 ? '' : 's'} into the GM console.`);
   }
 
   if (rejected.length > 0) {
@@ -58,8 +49,7 @@ function buildPipelineErrorMessage(stage, error) {
     import: 'Import failed',
     merge: 'Imported crew could not be added to the session',
     persist: 'Imported crew loaded, but session persistence failed',
-    render: 'Imported crew loaded, but the dashboard could not rerender',
-    handoff: 'Character handoff failed'
+    render: 'Imported crew loaded, but the dashboard could not rerender'
   }[stage] || 'Import failed';
 
   return {
@@ -119,13 +109,6 @@ function parseLineList(value) {
     .filter(Boolean);
 }
 
-function convertHandoffsToImportedRecords(entries) {
-  return entries.map((entry) => ({
-    payload: entry.payload,
-    sourceName: `${entry.summary?.name || entry.payload?.basics?.name || 'Crew Member'} handoff`
-  }));
-}
-
 export function bootGMAmanuensis(root = document.getElementById('app')) {
   if (!root) return null;
 
@@ -150,59 +133,39 @@ export function bootGMAmanuensis(root = document.getElementById('app')) {
     }
   }
 
-  function applyImportedRecords(imported, rejected = [], options = {}) {
-    let addedCount = 0;
-    let replacedCount = 0;
-    let persistError = null;
-
-    if (imported.length > 0) {
-      try {
-        const mergeOutcome = mergeImportedCrew(session, imported);
-        session = mergeOutcome.session;
-        addedCount = mergeOutcome.addedCount;
-        replacedCount = mergeOutcome.replacedCount;
-      } catch (error) {
-        flash = buildPipelineErrorMessage('merge', error);
-        if (options.render !== false) render();
-        return { addedCount: 0, replacedCount: 0 };
-      }
-
-      try {
-        persist();
-      } catch (error) {
-        persistError = error;
-      }
-    }
-
-    flash = persistError
-      ? buildPipelineErrorMessage('persist', persistError)
-      : buildImportMessage(addedCount, replacedCount, rejected);
-
-    if (options.render !== false) {
-      render();
-    }
-
-    return { addedCount, replacedCount };
-  }
-
-  function importQueuedHandoffs(options = {}) {
-    const queued = consumeQueuedGMHandshakes();
-    if (queued.length === 0) return { addedCount: 0, replacedCount: 0 };
-    return applyImportedRecords(convertHandoffsToImportedRecords(queued), [], options);
-  }
-
   async function handleImport(event) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
     try {
       const results = await importCrewFiles(files);
-      applyImportedRecords(results.imported, results.rejected);
+      let persistError = null;
+
+      if (results.imported.length > 0) {
+        try {
+          session = mergeImportedCrew(session, results.imported);
+        } catch (error) {
+          flash = buildPipelineErrorMessage('merge', error);
+          event.target.value = '';
+          render();
+          return;
+        }
+
+        try {
+          persist();
+        } catch (error) {
+          persistError = error;
+        }
+      }
+
+      flash = persistError
+        ? buildPipelineErrorMessage('persist', persistError)
+        : buildImportMessage(results.imported.length, results.rejected);
     } catch (error) {
       flash = buildPipelineErrorMessage('import', error);
-      render();
     }
     event.target.value = '';
+    render();
   }
 
   function commit(nextSession, nextFlash = null, options = {}) {
@@ -226,42 +189,11 @@ export function bootGMAmanuensis(root = document.getElementById('app')) {
     });
   }
 
-  window.addEventListener('storage', (event) => {
-    if (event.key !== getGMHandoffQueueKey()) return;
-    importQueuedHandoffs();
-  });
-
-  root.addEventListener('click', async (event) => {
+  root.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-action]');
     if (!trigger) return;
 
     const { action, memberId, field, delta, tabId } = trigger.dataset;
-
-    if (action === 'paste-handoff-code') {
-      let raw = '';
-      if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
-        try {
-          raw = await navigator.clipboard.readText();
-        } catch (error) {}
-      }
-      if (!String(raw || '').trim()) {
-        raw = window.prompt('Paste the Serenity GM handoff code from Character Crucible.');
-      }
-      if (!raw) return;
-
-      try {
-        const handoff = decodeCharacterHandoffCode(raw);
-        validateImportedPayload(handoff.payload);
-        applyImportedRecords([{
-          payload: handoff.payload,
-          sourceName: `${handoff.summary?.name || handoff.payload?.basics?.name || 'Crew Member'} handoff code`
-        }], []);
-      } catch (error) {
-        flash = buildPipelineErrorMessage('handoff', error);
-        render();
-      }
-      return;
-    }
 
     if (action === 'select-tab') {
       commit(setActiveTab(session, tabId || 'gm'), null);
@@ -449,7 +381,6 @@ export function bootGMAmanuensis(root = document.getElementById('app')) {
     })), null, { render: false });
   });
 
-  importQueuedHandoffs({ render: false });
   render();
   return {
     getSession: () => structuredClone(session)
@@ -457,4 +388,3 @@ export function bootGMAmanuensis(root = document.getElementById('app')) {
 }
 
 bootGMAmanuensis();
-

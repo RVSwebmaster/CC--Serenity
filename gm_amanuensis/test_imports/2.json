@@ -1,0 +1,49 @@
+{
+  "basics": {
+    "name": "2",
+    "quote": "",
+    "portraitDataUrl": "",
+    "concept": "Generic tab scroll tester.",
+    "role": "Pilot",
+    "customRole": "",
+    "roleSkill": "",
+    "crewValue": "",
+    "crewConnection": "",
+    "crewMotivation": "",
+    "homeworld": "",
+    "customHomeworld": "",
+    "background": ""
+  },
+  "attributes": {
+    "Agility": "d6",
+    "Strength": "d6",
+    "Vitality": "d6",
+    "Alertness": "d6",
+    "Intelligence": "d6",
+    "Willpower": "d6"
+  },
+  "traits": {
+    "assets": [],
+    "complications": []
+  },
+  "details": {
+    "startingCredits": "",
+    "currentCredits": "",
+    "platinum": "",
+    "moneyNotes": "",
+    "purchasedGear": [],
+    "starterPackageId": "",
+    "starterPackageNotes": "",
+    "gear": "",
+    "notes": ""
+  },
+  "trackers": {
+    "plotPoints": 6,
+    "stun": 0,
+    "wounds": 0
+  },
+  "meta": {
+    "heroicLevel": "Greenhorn",
+    "lastUpdated": "2026-04-03T00:00:00.000Z"
+  }
+}
