@@ -1,5 +1,6 @@
 import { HEROIC_LEVEL } from './data/defaults.js';
 import { loadState, saveState, clearState, exportState } from './storage.js';
+import { ensureCharacterIdentity, encodeCharacterHandoffCode, queueCharacterForGM } from './handoff.js';
 import { hydrateCharacter } from './state.js';
 import { remainingBudgets, validateCharacter, lifePoints, initiative } from './rules.js';
 import { renderWelcomeStep } from './steps/step_welcome.js';
@@ -43,6 +44,8 @@ const els = {
   nextBtn: document.getElementById('nextBtn'),
   saveBtn: document.getElementById('saveBtn'),
   exportBtn: document.getElementById('exportBtn'),
+  sendToGMBtn: document.getElementById('sendToGMBtn'),
+  copyGMCodeBtn: document.getElementById('copyGMCodeBtn'),
   importInput: document.getElementById('importInput'),
   resetBtn: document.getElementById('resetBtn'),
   printBtn: document.getElementById('printBtn'),
@@ -178,6 +181,65 @@ function mutateCharacter(mutator) {
   render({ preserveFocus: true });
 }
 
+function ensureTrackedCharacter() {
+  const tracked = ensureCharacterIdentity(state.character);
+  if (tracked.meta.characterId !== state.character.meta?.characterId) {
+    tracked.meta.lastUpdated = new Date().toISOString();
+    state.character = tracked;
+    saveState(state.character);
+  }
+  return tracked;
+}
+
+async function copyTextWithFallback(value) {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    await navigator.clipboard.writeText(value);
+    return true;
+  }
+
+  const helper = document.createElement('textarea');
+  helper.value = value;
+  helper.setAttribute('readonly', 'readonly');
+  helper.style.position = 'fixed';
+  helper.style.opacity = '0';
+  helper.style.pointerEvents = 'none';
+  document.body.append(helper);
+  helper.select();
+  helper.setSelectionRange(0, helper.value.length);
+
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } finally {
+    helper.remove();
+  }
+  return copied;
+}
+
+async function handleCopyGMCode() {
+  const tracked = ensureTrackedCharacter();
+  const handoffCode = encodeCharacterHandoffCode(tracked);
+
+  try {
+    const copied = await copyTextWithFallback(handoffCode);
+    if (!copied) throw new Error('copy command was not accepted');
+    setMessage(els.messageBar, 'GM handoff code copied. If the GM is on another device or there is no network, paste it into GM Amanuensis.', 'ok');
+  } catch (error) {
+    window.prompt('Copy this Serenity GM handoff code for the GM:', handoffCode);
+    setMessage(els.messageBar, 'Clipboard access was blocked, so the handoff code was opened for manual copy.', 'warn');
+  }
+}
+
+function handleSendToGM() {
+  const tracked = ensureTrackedCharacter();
+  const handoff = queueCharacterForGM(tracked);
+  setMessage(
+    els.messageBar,
+    `${handoff.summary.name} is queued for GM Amanuensis. If the GM app is open in this browser, it will import automatically. Use "Copy GM Handoff Code" for another device or an offline table.`,
+    'ok'
+  );
+}
+
 function renderStep(computed) {
   els.stepContent.innerHTML = '';
   const current = steps[state.stepIndex];
@@ -247,6 +309,8 @@ els.saveBtn.addEventListener('click', () => {
 });
 
 els.exportBtn.addEventListener('click', () => exportState(state.character));
+els.sendToGMBtn.addEventListener('click', handleSendToGM);
+els.copyGMCodeBtn.addEventListener('click', handleCopyGMCode);
 
 els.importInput.addEventListener('change', async (event) => {
   const file = event.target.files?.[0];

@@ -834,6 +834,12 @@ export function renderDashboard(root, session, flash) {
         el('label', { cls: 'gm-file-button', text: 'Import Character JSON' }, [importInput]),
         el('button', {
           cls: 'gm-button',
+          text: 'Paste Handoff Code',
+          attrs: { type: 'button' },
+          dataset: { action: 'paste-handoff-code' }
+        }),
+        el('button', {
+          cls: 'gm-button',
           text: 'Clear Crew',
           attrs: {
             type: 'button'
@@ -856,3 +862,4 @@ export function renderDashboard(root, session, flash) {
 
   return { importInput };
 }
+

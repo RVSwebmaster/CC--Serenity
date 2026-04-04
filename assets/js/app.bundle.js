@@ -90,6 +90,7 @@
         wounds: 0
       },
       meta: {
+        characterId: makeId(),
         heroicLevel: HEROIC_LEVEL.name,
         lastUpdated: null
       }
@@ -140,6 +141,72 @@
     URL.revokeObjectURL(url);
   }
 
+  // assets/js/handoff.js
+  var GM_HANDOFF_QUEUE_KEY = "serenity_suite_gm_handoff_queue";
+  var GM_HANDOFF_PREFIX = "SERENITY-HANDOFF:";
+  function makeId2(prefix = "id") {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+      return globalThis.crypto.randomUUID();
+    }
+    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+  function safeParseQueue() {
+    try {
+      const raw = localStorage.getItem(GM_HANDOFF_QUEUE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      localStorage.removeItem(GM_HANDOFF_QUEUE_KEY);
+      return [];
+    }
+  }
+  function safeWriteQueue(queue) {
+    localStorage.setItem(GM_HANDOFF_QUEUE_KEY, JSON.stringify(queue));
+  }
+  function encodeBase64(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = "";
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
+  }
+  function ensureCharacterIdentity(character) {
+    const draft = structuredClone(character || {});
+    draft.meta = {
+      ...draft.meta || {},
+      characterId: draft.meta?.characterId || makeId2("character")
+    };
+    return draft;
+  }
+  function createCharacterHandoff(character) {
+    const payload = ensureCharacterIdentity(character);
+    const sentAt = (/* @__PURE__ */ new Date()).toISOString();
+    return {
+      handoffId: makeId2("handoff"),
+      characterId: payload.meta.characterId,
+      sentAt,
+      payload,
+      summary: {
+        name: payload.basics?.name || "Unnamed Crew Member",
+        role: payload.basics?.role || payload.basics?.customRole || "Unassigned",
+        concept: payload.basics?.concept || ""
+      }
+    };
+  }
+  function queueCharacterForGM(character) {
+    const handoff = createCharacterHandoff(character);
+    const queue = safeParseQueue().filter((entry) => entry?.characterId !== handoff.characterId);
+    queue.push(handoff);
+    safeWriteQueue(queue);
+    return handoff;
+  }
+  function encodeCharacterHandoffCode(character) {
+    const handoff = createCharacterHandoff(character);
+    return `${GM_HANDOFF_PREFIX}${encodeBase64(JSON.stringify(handoff))}`;
+  }
+
   // assets/js/data/skills.js
   var SKILLS = [
     { name: "Animal Handling", specialties: ["Horses", "Livestock", "Training"] },
@@ -176,7 +243,7 @@
     "Professional Tools (Engineering/Medical)",
     "Services & Livestock"
   ];
-  function makeId2() {
+  function makeId3() {
     if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
       return globalThis.crypto.randomUUID();
     }
@@ -273,7 +340,7 @@
   }
   function createPurchasedGearEntry(item) {
     return {
-      id: makeId2(),
+      id: makeId3(),
       catalogId: item.id,
       name: item.name,
       category: item.category,
@@ -288,7 +355,7 @@
   function normalizePurchasedGearEntry(entry = {}) {
     const catalogMatch = getEquipmentItemById(entry.catalogId || "");
     return {
-      id: entry.id || makeId2(),
+      id: entry.id || makeId3(),
       catalogId: entry.catalogId || catalogMatch?.id || "",
       name: entry.name || catalogMatch?.name || "",
       category: entry.category || catalogMatch?.category || "",
@@ -340,6 +407,9 @@
     delete character.details.portraitUrl;
     Object.assign(character.trackers, input.trackers || {});
     Object.assign(character.meta, input.meta || {});
+    if (typeof character.meta.characterId !== "string" || !character.meta.characterId.trim()) {
+      character.meta.characterId = base.meta.characterId;
+    }
     character.details.purchasedGear = (input.details?.purchasedGear || []).map((item) => normalizePurchasedGearEntry(item));
     character.traits.assets = (input.traits?.assets || character.traits.assets).map((trait) => ({
       id: trait.id || (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function" ? globalThis.crypto.randomUUID() : createEmptySpecialty().id),
@@ -3619,6 +3689,8 @@
     nextBtn: document.getElementById("nextBtn"),
     saveBtn: document.getElementById("saveBtn"),
     exportBtn: document.getElementById("exportBtn"),
+    sendToGMBtn: document.getElementById("sendToGMBtn"),
+    copyGMCodeBtn: document.getElementById("copyGMCodeBtn"),
     importInput: document.getElementById("importInput"),
     resetBtn: document.getElementById("resetBtn"),
     printBtn: document.getElementById("printBtn"),
@@ -3732,6 +3804,58 @@
     saveState(state.character);
     render({ preserveFocus: true });
   }
+  function ensureTrackedCharacter() {
+    const tracked = ensureCharacterIdentity(state.character);
+    if (tracked.meta.characterId !== state.character.meta?.characterId) {
+      tracked.meta.lastUpdated = (/* @__PURE__ */ new Date()).toISOString();
+      state.character = tracked;
+      saveState(state.character);
+    }
+    return tracked;
+  }
+  async function copyTextWithFallback(value) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+    const helper = document.createElement("textarea");
+    helper.value = value;
+    helper.setAttribute("readonly", "readonly");
+    helper.style.position = "fixed";
+    helper.style.opacity = "0";
+    helper.style.pointerEvents = "none";
+    document.body.append(helper);
+    helper.select();
+    helper.setSelectionRange(0, helper.value.length);
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } finally {
+      helper.remove();
+    }
+    return copied;
+  }
+  async function handleCopyGMCode() {
+    const tracked = ensureTrackedCharacter();
+    const handoffCode = encodeCharacterHandoffCode(tracked);
+    try {
+      const copied = await copyTextWithFallback(handoffCode);
+      if (!copied) throw new Error("copy command was not accepted");
+      setMessage(els.messageBar, "GM handoff code copied. If the GM is on another device or there is no network, paste it into GM Amanuensis.", "ok");
+    } catch (error) {
+      window.prompt("Copy this Serenity GM handoff code for the GM:", handoffCode);
+      setMessage(els.messageBar, "Clipboard access was blocked, so the handoff code was opened for manual copy.", "warn");
+    }
+  }
+  function handleSendToGM() {
+    const tracked = ensureTrackedCharacter();
+    const handoff = queueCharacterForGM(tracked);
+    setMessage(
+      els.messageBar,
+      `${handoff.summary.name} is queued for GM Amanuensis. If the GM app is open in this browser, it will import automatically. Use "Copy GM Handoff Code" for another device or an offline table.`,
+      "ok"
+    );
+  }
   function renderStep(computed) {
     els.stepContent.innerHTML = "";
     const current = steps[state.stepIndex];
@@ -3793,6 +3917,8 @@
     setMessage(els.messageBar, "Character saved locally in this browser.", "ok");
   });
   els.exportBtn.addEventListener("click", () => exportState(state.character));
+  els.sendToGMBtn.addEventListener("click", handleSendToGM);
+  els.copyGMCodeBtn.addEventListener("click", handleCopyGMCode);
   els.importInput.addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
